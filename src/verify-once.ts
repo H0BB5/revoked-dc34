@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DelegationCredential } from '@kya-os/mcp';
 import { buildOnChainVerifier } from './lib/verifier.js';
-import { env, loadIssuerIdentity } from './lib/wiring.js';
+import { env, requiredEnv } from './lib/wiring.js';
 
 async function main() {
   const fileArg = process.argv.indexOf('--file');
@@ -27,8 +27,10 @@ async function main() {
   }
   const vc = JSON.parse(fs.readFileSync(file, 'utf-8')) as DelegationCredential;
 
-  const identity = loadIssuerIdentity();
-  const { verifier } = buildOnChainVerifier({ issuerDid: identity.did });
+  // Zero secrets needed: verification only requires the PUBLIC issuer DID.
+  // Everything else (DID document, status list) is read from the chain.
+  const issuerDid = requiredEnv('CHEQD_DID');
+  const { verifier } = buildOnChainVerifier({ issuerDid });
 
   const started = Date.now();
   const result = await verifier.verifyDelegationCredential(vc, { skipCache: true });
