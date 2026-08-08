@@ -17,7 +17,7 @@ Submit by **Sat Aug 8, 22:00 PDT** (deadline is midnight; do not flirt with it).
 | Tools / chains / protocols | cheqd testnet (Cosmos SDK) · cheqd DID registrar + universal resolver · DID-Linked Resources · W3C DID + Verifiable Credentials + StatusList2021 · KYA-OS / `@kya-os/mcp` (DIF) · Model Context Protocol (Streamable HTTP) · CosmJS · TypeScript |
 | GitLab URL | *(fork + MR into their `hackathon-submissions`; mirror of github.com/H0BB5/revoked-dc34)* |
 | Demo video URL | *(record Sat; public link, viewable logged-out, ≤3:00)* |
-| Slides URL | *(docs/slides.html in the repo — export/host or share screen)* |
+| Slides URL | *(web/slides.html — served at http://localhost:4949/slides.html by `npm run serve`; export/host or share screen)* |
 | Documentation URL | https://github.com/H0BB5/revoked-dc34#readme |
 
 ## Video shot list (≤3:00, screen capture of the act page)
