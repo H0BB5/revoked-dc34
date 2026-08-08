@@ -48,7 +48,8 @@ async function ensureAgentIdentity(): Promise<{ did: string; privateKeyBase64: s
   return { did, privateKeyBase64: keyPair.privateKey };
 }
 
-async function main() {
+export async function issueDelegationAt(index: string): Promise<{ file: string; subject: string }> {
+  if (!/^[0-9]+$/.test(index)) throw new Error(`index must be a non-negative decimal, got "${index}"`);
   const identity = loadIssuerIdentity();
   const signingFunction = makeVcSigningFunction(identity.privateKeyBase64);
   const issuer = new DelegationCredentialIssuer(
@@ -62,10 +63,6 @@ async function main() {
 
   const agent = await ensureAgentIdentity();
   const url = statusListUrl(identity.did);
-
-  const indexArg = process.argv.indexOf('--index');
-  const index = indexArg > -1 ? process.argv[indexArg + 1]! : env('STATUSLIST_INDEX', '94');
-  if (!/^[0-9]+$/.test(index)) throw new Error(`--index must be a non-negative decimal, got "${index}"`);
 
   const credentialStatus: CredentialStatus = {
     id: `${url}#${index}`,
@@ -117,9 +114,16 @@ async function main() {
     statusListIndex: index,
     statusListCredential: url,
   }, null, 2));
+
+  return { file: outPath, subject: agent.did };
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isMain = process.argv[1]?.endsWith('issue-delegation.ts');
+if (isMain) {
+  const indexArg = process.argv.indexOf('--index');
+  const index = indexArg > -1 ? process.argv[indexArg + 1]! : env('STATUSLIST_INDEX', '94');
+  issueDelegationAt(index).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

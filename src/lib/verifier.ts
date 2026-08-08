@@ -20,15 +20,14 @@ import {
   makeFetchProvider,
 } from './wiring.js';
 
-export function buildOnChainVerifier(options: { issuerDid: string; cacheTtlMs?: number }) {
-  const fetchProvider = makeFetchProvider();
-  const didResolver = {
-    /**
-     * Resolve, then synthesize `publicKeyJwk` (OKP/Ed25519) on any method that
-     * only carries publicKeyMultibase/publicKeyBase58: the shipped verifier's
-     * method lookup requires a JWK before it will invoke the signature check,
-     * and cheqd DID documents publish multibase keys.
-     */
+/**
+ * A DID resolver that synthesizes `publicKeyJwk` (OKP/Ed25519) on any method
+ * that only carries publicKeyMultibase/publicKeyBase58: the shipped verifier's
+ * method lookup requires a JWK before it will invoke the signature check, and
+ * cheqd DID documents publish multibase keys.
+ */
+export function makeJwkSynthesizingDidResolver(fetchProvider: ReturnType<typeof makeFetchProvider>) {
+  return {
     resolve: async (did: string) => {
       const doc = await fetchProvider.resolveDID(did);
       if (!doc?.verificationMethod) return doc;
@@ -44,6 +43,11 @@ export function buildOnChainVerifier(options: { issuerDid: string; cacheTtlMs?: 
       };
     },
   };
+}
+
+export function buildOnChainVerifier(options: { issuerDid: string; cacheTtlMs?: number }) {
+  const fetchProvider = makeFetchProvider();
+  const didResolver = makeJwkSynthesizingDidResolver(fetchProvider);
 
   const statusListResolver = new CheqdDlrStatusListResolver({
     fetchProvider,
