@@ -25,9 +25,7 @@ import {
   generateRequestProof,
   type DelegationCredential,
 } from '@kya-os/mcp';
-import { cryptoProvider, env, requiredEnv } from './lib/wiring.js';
-
-const VAR_DIR = path.resolve(process.cwd(), 'var');
+import { cryptoProvider, env, requiredEnv, VAR_DIR } from './lib/wiring.js';
 
 export interface AgentIdentity {
   did: string;

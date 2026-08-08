@@ -7,6 +7,8 @@
 import { config as loadDotenv } from 'dotenv';
 import { gzip, gunzip } from 'node:zlib';
 import { promisify } from 'node:util';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   NodeCryptoProvider,
   RuntimeFetchProvider,
@@ -20,7 +22,16 @@ import {
   buildCheqdDlrReference,
 } from '@kya-os/mcp/cheqd';
 
-loadDotenv({ path: ['.env.local', '.env'], quiet: true });
+/**
+ * Repo root, resolved from this module (src/lib/wiring.ts) — NOT process.cwd().
+ * The gateway is spawned by Claude Desktop with an arbitrary working directory,
+ * so `.env.local`, `var/`, and `.data/` must anchor here to be found.
+ */
+export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+export const VAR_DIR = path.join(REPO_ROOT, 'var');
+export const DATA_DIR = path.join(REPO_ROOT, '.data');
+
+loadDotenv({ path: [path.join(REPO_ROOT, '.env.local'), path.join(REPO_ROOT, '.env')], quiet: true });
 
 // ---------------------------------------------------------------------------
 // Environment

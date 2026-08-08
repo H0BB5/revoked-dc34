@@ -20,6 +20,8 @@
     "revoke": "tsx src/revoke.ts",
     "verify:once": "tsx src/verify-once.ts",
     "agent": "tsx src/agent.ts",
+    "gateway": "tsx src/gateway.ts",
+    "gateway:probe": "tsx scripts/gateway-probe.ts",
     "serve": "tsx src/server.ts"
   },
   "dependencies": {

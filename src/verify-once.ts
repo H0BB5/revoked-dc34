@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DelegationCredential } from '@kya-os/mcp';
 import { buildOnChainVerifier } from './lib/verifier.js';
-import { env, requiredEnv } from './lib/wiring.js';
+import { env, requiredEnv, VAR_DIR } from './lib/wiring.js';
 
 async function main() {
   const fileArg = process.argv.indexOf('--file');
@@ -20,7 +20,7 @@ async function main() {
   const index = indexArg > -1 ? process.argv[indexArg + 1]! : env('STATUSLIST_INDEX', '94');
   const file = fileArg > -1
     ? process.argv[fileArg + 1]!
-    : path.resolve(process.cwd(), 'var', `delegation-${index}.json`);
+    : path.join(VAR_DIR, `delegation-${index}.json`);
 
   if (!fs.existsSync(file)) {
     throw new Error(`No credential at ${file} — run: npm run issue:delegation -- --index ${index}`);

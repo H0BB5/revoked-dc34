@@ -27,10 +27,9 @@ import {
   statusListUrl,
 } from './lib/wiring.js';
 import { readEnvLocal, writeEnvLocal } from '../scripts/lib/env-local.js';
+import { VAR_DIR } from './lib/wiring.js';
 
 export const MAX_AMOUNT_NCHEQ = 10_000_000_000n; // 10 CHEQ — say it out loud in the demo
-
-const VAR_DIR = path.resolve(process.cwd(), 'var');
 
 async function ensureAgentIdentity(): Promise<{ did: string; privateKeyBase64: string }> {
   const existing = readEnvLocal();

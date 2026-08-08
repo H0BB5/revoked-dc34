@@ -1,0 +1,12 @@
+{
+  "_comment": "Merge the kya-wallet entry into your existing claude_desktop_config.json (macOS: ~/Library/Application Support/Claude/claude_desktop_config.json). The gateway loads keys+VC from the repo's .env.local and var/ (anchored to the repo, not cwd). Fully restart Claude Desktop after editing. The protected server must be running: npm run serve.",
+  "mcpServers": {
+    "kya-wallet": {
+      "command": "npx",
+      "args": ["tsx", "/Users/dylanhobbs/@kya-os/revoked-dc34/src/gateway.ts"],
+      "env": {
+        "DEMO_PORT": "4949"
+      }
+    }
+  }
+}

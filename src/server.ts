@@ -38,6 +38,7 @@ import {
   loadIssuerIdentity,
   makeFetchProvider,
   statusListUrl,
+  VAR_DIR,
 } from './lib/wiring.js';
 import { makeJwkSynthesizingDidResolver } from './lib/verifier.js';
 import { CheqdDlrStatusListResolver } from './cheqd-statuslist-resolver.js';
@@ -55,7 +56,6 @@ import {
 } from './wallet-send-tool.js';
 
 const PORT = Number(env('DEMO_PORT', '4949'));
-const VAR_DIR = path.resolve(process.cwd(), 'var');
 const ACTIVE_INDEX_FILE = path.join(VAR_DIR, 'active-index');
 const SPARE_MAX = 120; // 131072-bit list; burn as many rehearsal indices as needed
 
