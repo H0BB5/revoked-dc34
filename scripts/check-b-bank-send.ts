@@ -15,7 +15,8 @@ const NCHEQ_PER_CHEQ = 1_000_000_000n; // cheqd exponent 9
 async function main() {
   const rpcUrl = env('CHEQD_RPC_URL', 'https://rpc.cheqd.network');
   const denom = env('CHEQD_DENOM', 'ncheq');
-  const gasPrice = env('CHEQD_GAS_PRICE', `50${denom}`);
+  // cheqd testnet min gas price is 5000ncheq (verified live: 50ncheq → code 13 insufficient fees)
+  const gasPrice = env('CHEQD_GAS_PRICE', `5000${denom}`);
   const amountCheq = BigInt(env('CHECK_B_AMOUNT_CHEQ', '1'));
 
   const agentWallet = await DirectSecp256k1HdWallet.fromMnemonic(
@@ -51,8 +52,9 @@ async function main() {
   const amount = coins((amountCheq * NCHEQ_PER_CHEQ).toString(), denom);
   console.log(`\nSending ${amountCheq} CHEQ…`);
   const started = Date.now();
+  // multiplier 2: 'auto' (1.4×) landed 300 gas short on cheqd testnet (code 11)
   const result = await client.sendTokens(
-    agent!.address, fee!.address, amount, 'auto', 'revoked-dc34 check-b',
+    agent!.address, fee!.address, amount, 2, 'revoked-dc34 check-b',
   );
   assertIsDeliverTxSuccess(result);
 
