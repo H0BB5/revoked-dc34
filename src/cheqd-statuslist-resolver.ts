@@ -68,18 +68,12 @@ export interface CheqdDlrStatusListResolverOptions {
   decompressor: Decodec;
   /** In-memory TTL for the fetched list; 0 disables caching. Default 10s. */
   cacheTtlMs?: number;
-  /**
-   * Query param appended (with a timestamp value) to defeat resolver-side
-   * caches right after a revocation. Set to null if the resolver rejects
-   * unknown params. Default '_'.
-   */
-  cacheBustParam?: string | null;
 }
 
 const ED25519_MULTICODEC = new Uint8Array([0xed, 0x01]);
 
 export class CheqdDlrStatusListResolver {
-  private readonly opts: Required<Pick<CheqdDlrStatusListResolverOptions, 'cacheTtlMs' | 'cacheBustParam'>> &
+  private readonly opts: Required<Pick<CheqdDlrStatusListResolverOptions, 'cacheTtlMs'>> &
     CheqdDlrStatusListResolverOptions;
   private cache = new Map<string, { at: number; credential: StatusList2021Credential }>();
   private bustNextFetch = false;
@@ -87,7 +81,6 @@ export class CheqdDlrStatusListResolver {
   constructor(options: CheqdDlrStatusListResolverOptions) {
     this.opts = {
       cacheTtlMs: 10_000,
-      cacheBustParam: '_',
       ...options,
     };
   }
@@ -140,15 +133,16 @@ export class CheqdDlrStatusListResolver {
       return cached.credential;
     }
 
-    let fetchUrl = url;
-    if (this.bustNextFetch && this.opts.cacheBustParam) {
-      const sep = url.includes('?') ? '&' : '?';
-      fetchUrl = `${url}${sep}${this.opts.cacheBustParam}=${Date.now()}`;
-    }
-
-    const response = await this.opts.fetchProvider.fetch(fetchUrl, {
+    // NEVER append query params here: the cheqd resolver parses the query as
+    // DID URL dereferencing input and 400s (invalidDidUrl) on unknown params
+    // (verified live at DEF CON). The endpoint is served cf-cache-status
+    // DYNAMIC, so post-revocation freshness only needs a no-cache header.
+    const response = await this.opts.fetchProvider.fetch(url, {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...(this.bustNextFetch ? { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } : {}),
+      },
     });
     if (!response.ok) {
       throw new Error(`Status list fetch failed: HTTP ${response.status} for ${url}`);

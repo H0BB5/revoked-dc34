@@ -62,12 +62,12 @@ function makeResolver(options: {
   reject?: boolean;
   expectedIssuerDid?: string;
   cacheTtlMs?: number;
-  fetchLog?: string[];
+  fetchLog?: Array<{ url: string; headers: Record<string, string> }>;
 }) {
   return new CheqdDlrStatusListResolver({
     fetchProvider: {
-      fetch: async (url: string) => {
-        options.fetchLog?.push(url);
+      fetch: async (url: string, init?: Record<string, unknown>) => {
+        options.fetchLog?.push({ url, headers: (init?.['headers'] ?? {}) as Record<string, string> });
         if (options.reject) throw new Error('network down');
         return {
           ok: (options.httpStatus ?? 200) < 400,
@@ -184,8 +184,8 @@ describe('CheqdDlrStatusListResolver — fail closed', () => {
 });
 
 describe('CheqdDlrStatusListResolver — caching', () => {
-  it('caches within TTL and re-fetches (with cache-bust) after invalidateCache()', async () => {
-    const fetchLog: string[] = [];
+  it('caches within TTL and re-fetches with no-cache headers after invalidateCache()', async () => {
+    const fetchLog: Array<{ url: string; headers: Record<string, string> }> = [];
     const resolver = makeResolver({ body: listClear, cacheTtlMs: 60_000, fetchLog });
 
     await resolver.checkStatus(status());
@@ -195,7 +195,9 @@ describe('CheqdDlrStatusListResolver — caching', () => {
     resolver.invalidateCache();
     await resolver.checkStatus(status());
     expect(fetchLog).toHaveLength(2);
-    expect(fetchLog[1]).toContain('_=');
+    // the URL must stay untouched — the cheqd resolver 400s on unknown params
+    expect(fetchLog[1]!.url).toBe(URL);
+    expect(fetchLog[1]!.headers['Cache-Control']).toBe('no-cache');
   });
 });
 

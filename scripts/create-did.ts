@@ -3,20 +3,24 @@
  * Create the issuer's did:cheqd:testnet DID via the cheqd staging registrar
  * (client-managed-secret flow — the Ed25519 key never leaves this machine).
  *
+ * The DID document comes from the registrar's own /did-document helper, so the
+ * shape is exactly what the registrar's create flow expects (verified against
+ * its OpenAPI spec: params verificationMethod / methodSpecificIdAlgo / network
+ * / publicKeyHex; the response's didDoc includes the top-level controller
+ * array the create validation requires).
+ *
  * Writes CHEQD_DID / CHEQD_KID / CHEQD_PRIVATE_KEY_BASE64 to .env.local.
  * Idempotent: refuses to overwrite an existing identity unless --force.
  */
-import { randomUUID } from 'node:crypto';
-import { base58Encode } from '@kya-os/mcp';
+import type { DIDDocument } from '@kya-os/mcp';
 import {
   cryptoProvider,
   makeFetchProvider,
   makeRegistrar,
+  REGISTRAR_URL,
 } from '../src/lib/wiring.js';
 import { createLocalEd25519CheqdRegistrarSigner } from '@kya-os/mcp/cheqd';
 import { readEnvLocal, writeEnvLocal } from './lib/env-local.js';
-
-const ED25519_MULTICODEC = Buffer.from([0xed, 0x01]);
 
 async function main() {
   const existing = readEnvLocal();
@@ -26,29 +30,29 @@ async function main() {
   }
 
   const keyPair = await cryptoProvider.generateKeyPair();
-  const publicKeyBytes = Buffer.from(keyPair.publicKey, 'base64');
-  const publicKeyMultibase = 'z' + base58Encode(
-    new Uint8Array(Buffer.concat([ED25519_MULTICODEC, publicKeyBytes])),
-  );
-
-  const did = `did:cheqd:testnet:${randomUUID()}`;
-  const kid = `${did}#key-1`;
-
-  const didDocument = {
-    id: did,
-    verificationMethod: [
-      {
-        id: kid,
-        type: 'Ed25519VerificationKey2020',
-        controller: did,
-        publicKeyMultibase,
-      },
-    ],
-    authentication: [kid],
-    assertionMethod: [kid],
-  };
+  const publicKeyHex = Buffer.from(keyPair.publicKey, 'base64').toString('hex');
 
   const fetchProvider = makeFetchProvider();
+
+  const helperUrl = `${REGISTRAR_URL}/did-document` +
+    `?verificationMethod=Ed25519VerificationKey2020` +
+    `&methodSpecificIdAlgo=uuid&network=testnet&publicKeyHex=${publicKeyHex}`;
+  const helperResponse = await fetchProvider.fetch(helperUrl, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+  if (!helperResponse.ok) {
+    throw new Error(`did-document helper failed: HTTP ${helperResponse.status}`);
+  }
+  const helper = (await helperResponse.json()) as {
+    didDoc: DIDDocument & { controller?: string[] };
+    key: { kid: string; publicKeyHex: string };
+  };
+  const didDocument = helper.didDoc;
+  const did = didDocument.id;
+  const kid = helper.key.kid ?? `${did}#key-1`;
+  console.log(`Registrar-generated DID document for ${did}`);
+
   const registrar = makeRegistrar(fetchProvider);
   const signer = createLocalEd25519CheqdRegistrarSigner({
     cryptoProvider,
@@ -57,7 +61,7 @@ async function main() {
     signatureEncoding: 'base64url',
   });
 
-  console.log(`Creating ${did} via staging registrar…`);
+  console.log('Submitting create (client-managed-secret signing flow)…');
   const result = await registrar.createDid({
     didDocument,
     signer,

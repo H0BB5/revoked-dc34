@@ -111,14 +111,16 @@ export async function fetchLatestStatusList(
   url: string,
   options?: { bust?: boolean },
 ): Promise<StatusList2021Credential> {
-  let fetchUrl = url;
-  if (options?.bust) {
-    const sep = url.includes('?') ? '&' : '?';
-    fetchUrl = `${url}${sep}_=${Date.now()}`;
-  }
-  const response = await fetchProvider.fetch(fetchUrl, {
+  // NOTE: never append extra query params — the cheqd resolver treats the query
+  // string as DID URL dereferencing input and 400s (invalidDidUrl) on unknown
+  // params. Verified live: the query is cf-cache-status DYNAMIC (uncached), so
+  // a no-cache header is all "busting" can or needs to be.
+  const response = await fetchProvider.fetch(url, {
     method: 'GET',
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      ...(options?.bust ? { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } : {}),
+    },
   });
   if (!response.ok) {
     throw new Error(`Status list fetch failed: HTTP ${response.status} for ${url}`);
@@ -178,6 +180,7 @@ export async function waitForStatusListVisible(options: {
   const timeoutMs = options.timeoutMs ?? 120_000;
   const intervalMs = options.intervalMs ?? 2_000;
   const started = Date.now();
+  let lastError: unknown;
 
   for (;;) {
     try {
@@ -185,11 +188,14 @@ export async function waitForStatusListVisible(options: {
       if (options.predicate(vc)) {
         return { elapsedMs: Date.now() - started, credential: vc };
       }
-    } catch {
+      lastError = new Error('fetched a list, but the predicate did not match yet');
+    } catch (err) {
       // transient resolver errors during propagation are expected; keep polling
+      lastError = err;
     }
     if (Date.now() - started > timeoutMs) {
-      throw new Error(`Status list not visible at ${options.url} within ${timeoutMs}ms`);
+      const detail = lastError instanceof Error ? lastError.message : String(lastError);
+      throw new Error(`Status list not visible at ${options.url} within ${timeoutMs}ms (last error: ${detail})`);
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
