@@ -23,7 +23,26 @@ import {
 export function buildOnChainVerifier(options: { issuerDid: string; cacheTtlMs?: number }) {
   const fetchProvider = makeFetchProvider();
   const didResolver = {
-    resolve: (did: string) => fetchProvider.resolveDID(did),
+    /**
+     * Resolve, then synthesize `publicKeyJwk` (OKP/Ed25519) on any method that
+     * only carries publicKeyMultibase/publicKeyBase58: the shipped verifier's
+     * method lookup requires a JWK before it will invoke the signature check,
+     * and cheqd DID documents publish multibase keys.
+     */
+    resolve: async (did: string) => {
+      const doc = await fetchProvider.resolveDID(did);
+      if (!doc?.verificationMethod) return doc;
+      return {
+        ...doc,
+        verificationMethod: doc.verificationMethod.map((method) => {
+          if ((method as { publicKeyJwk?: unknown }).publicKeyJwk) return method;
+          const publicKeyBase64 = extractEd25519PublicKeyBase64(method);
+          if (!publicKeyBase64) return method;
+          const x = Buffer.from(publicKeyBase64, 'base64').toString('base64url');
+          return { ...method, publicKeyJwk: { kty: 'OKP', crv: 'Ed25519', x } };
+        }),
+      };
+    },
   };
 
   const statusListResolver = new CheqdDlrStatusListResolver({
