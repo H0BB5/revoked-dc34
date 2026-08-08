@@ -21,6 +21,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
 import { getRequestListener } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import {
@@ -171,6 +172,50 @@ function buildGate(): { kyaos: KyaOsMiddleware; walletSendHandler: ReturnType<Ky
 let gate = buildGate();
 
 // ---------------------------------------------------------------------------
+// Event bus — the console is a VERIFIER VIEW that observes this server, so a
+// send driven by Claude Desktop (via the gateway) lights up the same gates as
+// a send from the console's own simulated-agent buttons. One emission point.
+// ---------------------------------------------------------------------------
+
+type Subscriber = (data: string) => void;
+const subscribers = new Set<Subscriber>();
+
+function broadcast(event: Record<string, unknown>): void {
+  const data = JSON.stringify({ ...event, at: new Date().toISOString() });
+  for (const sub of subscribers) {
+    try { sub(data); } catch { /* a dead subscriber must not break the others */ }
+  }
+}
+
+type GateState = 'pass' | 'fail' | 'skip';
+interface GateChecks {
+  signature: GateState; holder: GateState; scope: GateState;
+  revocation: GateState; cap: GateState; receipt: GateState;
+}
+
+/**
+ * Map an outcome to the six gates, honestly following the middleware's ACTUAL
+ * order: basic+signature → status(revocation) → holder-binding → scope → the
+ * in-credential cap (our innermost handler check) → signed receipt.
+ */
+function checksFromOutcome(verdict: 'allowed' | 'denied', code: string | undefined, reason: string): GateChecks {
+  if (verdict === 'allowed') {
+    return { signature: 'pass', holder: 'pass', scope: 'pass', revocation: 'pass', cap: 'pass', receipt: 'pass' };
+  }
+  if (code === 'holder_binding_failed') {
+    return { signature: 'pass', revocation: 'pass', holder: 'fail', scope: 'skip', cap: 'skip', receipt: 'skip' };
+  }
+  if (/revoked/i.test(reason)) {
+    return { signature: 'pass', revocation: 'fail', holder: 'skip', scope: 'skip', cap: 'skip', receipt: 'skip' };
+  }
+  if (code === 'SCOPE_CONSTRAINT_VIOLATED') {
+    return { signature: 'pass', holder: 'pass', revocation: 'pass', scope: 'pass', cap: 'fail', receipt: 'skip' };
+  }
+  // Any other delegation_invalid → the signature/basic gate is the earliest fail.
+  return { signature: 'fail', holder: 'skip', scope: 'skip', revocation: 'skip', cap: 'skip', receipt: 'skip' };
+}
+
+// ---------------------------------------------------------------------------
 // MCP surface (Streamable HTTP) — inspector-compatible
 // ---------------------------------------------------------------------------
 
@@ -203,7 +248,35 @@ function createMcpServer(): Server {
     const { name, arguments: args = {} } = request.params;
     const sessionId = extra?.sessionId;
     if (name === '_kyaos') return gate.kyaos.handleKyaOs(args as Record<string, unknown>);
-    if (name === 'wallet_send') return gate.walletSendHandler(args as Record<string, unknown>, sessionId);
+    if (name === 'wallet_send') {
+      // THE single emission point: every wallet_send — Claude Desktop's or the
+      // console's simulated agent — flows through here and lights the console.
+      const amount = String((args as Record<string, unknown>)['amount'] ?? '');
+      broadcast({ type: 'request', tool: 'wallet_send', amountCheq: amount });
+
+      const result = await gate.walletSendHandler(args as Record<string, unknown>, sessionId);
+
+      const r = result as { isError?: boolean; content?: Array<{ text?: string }>; _meta?: Record<string, unknown> };
+      const text = r.content?.[0]?.text ?? '{}';
+      let body: Record<string, unknown> = {};
+      try { body = JSON.parse(text); } catch { body = {}; }
+      const verdict: 'allowed' | 'denied' = r.isError || body['error'] ? 'denied' : 'allowed';
+      const code = body['error'] as string | undefined;
+      const reason = String(body['reason'] ?? body['message'] ?? '');
+
+      broadcast({
+        type: 'verdict',
+        verdict,
+        code: code ?? null,
+        reason: reason || null,
+        amountCheq: amount,
+        txHash: body['txHash'] ?? null,
+        explorer: body['explorer'] ?? null,
+        checks: checksFromOutcome(verdict, code, reason),
+        receipt: (r._meta?.['org.kya-os/response-proof'] ?? r._meta?.['proof']) ?? null,
+      });
+      return result;
+    }
     return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
   });
 
@@ -215,6 +288,20 @@ function createMcpServer(): Server {
 // ---------------------------------------------------------------------------
 
 const app = new Hono();
+
+app.get('/api/events', (c) =>
+  streamSSE(c, async (stream) => {
+    const sub: Subscriber = (data) => { void stream.writeSSE({ data }); };
+    subscribers.add(sub);
+    await stream.writeSSE({ data: JSON.stringify({ type: 'hello', at: new Date().toISOString() }) });
+    await new Promise<void>((resolve) => {
+      const ping = setInterval(() => {
+        void stream.writeSSE({ data: JSON.stringify({ type: 'ping' }) }).catch(() => {});
+      }, 15000);
+      stream.onAbort(() => { clearInterval(ping); subscribers.delete(sub); resolve(); });
+    });
+  }),
+);
 
 app.get('/api/state', async (c) => {
   const url = statusListUrl(identity.did);
@@ -266,8 +353,12 @@ app.post('/api/act/send', async (c) => {
 app.post('/api/act/revoke', async (c) => {
   const phases: RevokePhase[] = [];
   const index = activeIndex();
-  const result = await revokeIndex(index, { onPhase: (p) => phases.push(p) });
+  broadcast({ type: 'revoke_start', index });
+  const result = await revokeIndex(index, {
+    onPhase: (p) => { phases.push(p); broadcast({ type: 'revoke_phase', index, ...p }); },
+  });
   gate = buildGate(); // fresh verifier — no 60s cached-valid verdict survives
+  broadcast({ type: 'revoke_done', index, ...result });
   return c.json({ index, phases, ...result });
 });
 
