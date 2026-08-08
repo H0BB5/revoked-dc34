@@ -47,6 +47,8 @@ import { fetchLatestStatusList } from './statuslist-ops.js';
 import { revokeIndex, type RevokePhase } from './revoke.js';
 import { issueDelegationAt } from './issue-delegation.js';
 import { runAgentSend } from './agent.js';
+import { createBadgeRoutes } from './badge/webauthn-routes.js';
+import { hasBadgeCredential } from './badge/credential-store.js';
 import {
   agentAddress,
   agentBalanceNcheq,
@@ -59,6 +61,17 @@ import {
 const PORT = Number(env('DEMO_PORT', '4949'));
 const ACTIVE_INDEX_FILE = path.join(VAR_DIR, 'active-index');
 const SPARE_MAX = 120; // 131072-bit list; burn as many rehearsal indices as needed
+
+// Badge (WebAuthn) config. Feature is OFF unless BADGE_WEBAUTHN=1, and can be
+// force-bypassed on stage with DEMO_BYPASS_WEBAUTHN=1 — so the badge can never
+// block the demo. RP ID / origin default to localhost (WebAuthn allows http
+// only for localhost); set WEBAUTHN_RP_ID / WEBAUTHN_ORIGIN for a hosted origin.
+const RP_ID = env('WEBAUTHN_RP_ID', 'localhost');
+const ORIGIN = env('WEBAUTHN_ORIGIN', `http://localhost:${PORT}`);
+const BADGE_SETUP = process.env['BADGE_SETUP'] === '1';
+const BADGE_WEBAUTHN = process.env['BADGE_WEBAUTHN'] === '1';
+const DEMO_BYPASS_WEBAUTHN = process.env['DEMO_BYPASS_WEBAUTHN'] === '1';
+const badgeRequired = () => BADGE_WEBAUTHN && !DEMO_BYPASS_WEBAUTHN && hasBadgeCredential();
 
 // ---------------------------------------------------------------------------
 // Active credential state (which status-list index the demo is running on)
@@ -326,6 +339,9 @@ app.get('/api/state', async (c) => {
     capNcheq: extractSpendCapNcheq(vc).toString(),
     scope: 'payments.transfer',
     expires: vc.expirationDate ?? null,
+    badgeRequired: badgeRequired(),
+    badgeConfigured: hasBadgeCredential(),
+    badgeSetup: BADGE_SETUP,
   });
 });
 
@@ -350,17 +366,41 @@ app.post('/api/act/send', async (c) => {
   });
 });
 
-app.post('/api/act/revoke', async (c) => {
-  const phases: RevokePhase[] = [];
-  const index = activeIndex();
+/**
+ * The actual on-chain revocation, shared by the software path (/api/act/revoke)
+ * and the badge-gated path (/api/revoke/execute). Streams phases over SSE and
+ * rebuilds the gate so no cached-valid verdict survives.
+ */
+async function performRevoke(index: number): Promise<{ resourceId: string | undefined; txHash: string | undefined; visibleMs: number; totalMs: number }> {
   broadcast({ type: 'revoke_start', index });
   const result = await revokeIndex(index, {
-    onPhase: (p) => { phases.push(p); broadcast({ type: 'revoke_phase', index, ...p }); },
+    onPhase: (p: RevokePhase) => broadcast({ type: 'revoke_phase', index, ...p }),
   });
-  gate = buildGate(); // fresh verifier — no 60s cached-valid verdict survives
+  gate = buildGate();
   broadcast({ type: 'revoke_done', index, ...result });
-  return c.json({ index, phases, ...result });
+  return result;
+}
+
+// Software revoke — used when the badge feature is off or bypassed. When a badge
+// IS required, the console runs the two-phase /api/revoke/* flow instead.
+app.post('/api/act/revoke', async (c) => {
+  if (badgeRequired()) {
+    return c.json({ error: 'badge_required', message: 'Revocation requires a hardware badge assertion (/api/revoke/challenge).' }, 403);
+  }
+  const index = activeIndex();
+  const result = await performRevoke(index);
+  return c.json({ index, ...result });
 });
+
+app.route('/', createBadgeRoutes({
+  rpID: RP_ID,
+  origin: ORIGIN,
+  rpName: 'REVOKED — KYA-OS',
+  setupEnabled: BADGE_SETUP,
+  statusListUrl: () => statusListUrl(identity.did),
+  currentIndex: () => activeIndex(),
+  performRevoke,
+}));
 
 app.post('/api/act/reset', async (c) => {
   const next = activeIndex() + 1;

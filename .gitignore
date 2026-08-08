@@ -4,5 +4,6 @@ coverage/
 .env
 .env.local
 var/
+.data/
 *.log
 .DS_Store

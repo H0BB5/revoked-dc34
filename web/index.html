@@ -125,6 +125,22 @@
 
   footer { margin-top: 18px; color: var(--dim); font-size: 11px; letter-spacing: 0.08em; display: flex; gap: 18px; flex-wrap: wrap; }
   .pill { border: 1px solid var(--line); padding: 1px 8px; }
+
+  /* badge overlay — the "touch the badge" moment */
+  .badge-overlay { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(6,8,10,0.88); backdrop-filter: blur(3px); }
+  .badge-overlay.on { display: flex; }
+  .badge-card { text-align: center; padding: 40px 48px; border: 1px solid var(--kill-deep); background: var(--panel); max-width: 520px; }
+  .badge-ring { width: 128px; height: 128px; margin: 0 auto 26px; border-radius: 50%; border: 3px solid var(--kill); display: flex; align-items: center; justify-content: center; position: relative; }
+  .badge-ring::before { content: ""; position: absolute; inset: -12px; border-radius: 50%; border: 2px solid var(--kill); opacity: 0.5; animation: ring 1.4s ease-out infinite; }
+  @keyframes ring { 0% { transform: scale(0.9); opacity: 0.7; } 100% { transform: scale(1.35); opacity: 0; } }
+  .badge-glyph { font-size: 56px; }
+  .badge-card h2 { color: var(--bright); font-size: 24px; font-weight: 800; letter-spacing: 0.04em; margin-bottom: 10px; }
+  .badge-card .sub { color: var(--dim); font-size: 12.5px; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .badge-card .sub b { color: var(--warn); }
+  .badge-card .intent { font-size: 11.5px; color: var(--dim); margin-top: 14px; }
+  .badge-card .intent code { color: var(--text); }
+  .badge-cancel { margin-top: 22px; background: none; border: 1px solid var(--line-hot); color: var(--dim); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 8px 16px; cursor: pointer; }
+  .badge-cancel:hover { color: var(--text); border-color: var(--text); }
 </style>
 </head>
 <body>
@@ -204,6 +220,17 @@
   </div>
 </div>
 
+<div class="badge-overlay" id="badge-overlay">
+  <div class="badge-card">
+    <div class="badge-ring"><span class="badge-glyph">⏻</span></div>
+    <h2>Touch the badge to authorize</h2>
+    <div class="sub">Killing this agent requires <b>a human, physically present</b></div>
+    <div class="sub">DEF CON 34 badge · FIDO2 · inspectable silicon</div>
+    <div class="intent" id="badge-intent"></div>
+    <button class="badge-cancel" id="badge-cancel">Cancel — leave agent active</button>
+  </div>
+</div>
+
 <footer>
   <span class="pill">team: Revoked (solo)</span>
   <span>repo: <a href="https://github.com/H0BB5/revoked-dc34" target="_blank" rel="noopener">github.com/H0BB5/revoked-dc34</a></span>
@@ -265,9 +292,11 @@
     return res.json();
   }
 
+  let stateCache = {};
   async function refresh(withDelta = false) {
     try {
       const s = await api('/api/state');
+      stateCache = s;
       const bal = BigInt(s.balanceNcheq);
       if (withDelta && lastBalance !== null && bal !== lastBalance) {
         const d = Number(bal - lastBalance) / 1e9;
@@ -370,10 +399,73 @@
     setBusy(false);
   }
 
+  // ── badge-gated revocation (WebAuthn). Native ceremony, no library, so the
+  //    page stays self-contained/offline. Falls back to software revoke when a
+  //    badge isn't required (feature off, bypassed, or unregistered). ─────────
+  const b64uToBuf = (s) => {
+    const pad = '='.repeat((4 - (s.length % 4)) % 4);
+    const bin = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    const u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return u.buffer;
+  };
+  const bufToB64u = (buf) => {
+    const b = new Uint8Array(buf); let s = '';
+    for (const x of b) s += String.fromCharCode(x);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  };
+  const showBadge = (p) => {
+    $('badge-intent').innerHTML = `approving revocation of delegation <code>#${p?.index ?? '?'}</code> · challenge <code>${p?.challengeHead ?? ''}…</code>`;
+    $('badge-overlay').classList.add('on');
+  };
+  const hideBadge = () => $('badge-overlay').classList.remove('on');
+  $('badge-cancel').onclick = () => { hideBadge(); line('Badge approval cancelled — agent still ACTIVE', 'warn-line'); setBusy(false); };
+
+  async function revokeAction() {
+    if (busy) return;
+    if (!stateCache.badgeRequired) return trigger('/api/act/revoke', {});
+    setBusy(true);
+    try {
+      const ch = await api('/api/revoke/challenge', {});
+      if (ch.error) { line('Revoke: ' + ch.error, 'warn-line'); setBusy(false); return; }
+      showBadge(ch.intentPreview);
+      const o = ch.options;
+      const publicKey = {
+        challenge: b64uToBuf(o.challenge),
+        timeout: o.timeout,
+        rpId: o.rpId,
+        userVerification: o.userVerification,
+        allowCredentials: (o.allowCredentials || []).map((cr) => ({
+          id: b64uToBuf(cr.id), type: 'public-key', ...(cr.transports ? { transports: cr.transports } : {}),
+        })),
+      };
+      let cred;
+      try { cred = await navigator.credentials.get({ publicKey }); }
+      catch { hideBadge(); line('Badge approval cancelled / timed out — agent still ACTIVE', 'warn-line'); setBusy(false); return; }
+      const r = cred.response;
+      const assertion = {
+        id: cred.id, rawId: bufToB64u(cred.rawId), type: cred.type,
+        clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+        response: {
+          clientDataJSON: bufToB64u(r.clientDataJSON),
+          authenticatorData: bufToB64u(r.authenticatorData),
+          signature: bufToB64u(r.signature),
+          ...(r.userHandle ? { userHandle: bufToB64u(r.userHandle) } : {}),
+        },
+      };
+      const exec = await api('/api/revoke/execute', { nonce: ch.nonce, response: assertion });
+      hideBadge();
+      if (exec.error) { line('Revocation refused (badge): ' + exec.error, 'kill-line', true); }
+      else { line(`badge assertion verified ✓ · credId …${exec.credentialIdTail} · aaguid ${exec.aaguid ?? 'n/a'} · record ${(exec.recordFile || '').split('/').pop() || ''}`, 'kill-line'); }
+      // the SSE revoke_* events drive the seal + phase log
+    } catch (e) { hideBadge(); line('badge revoke error: ' + e.message, 'kill-line'); }
+    setBusy(false);
+  }
+
   $('btn-send').onclick    = () => trigger('/api/act/send', { amount: '1' });
   $('btn-overcap').onclick = () => trigger('/api/act/send', { amount: '100' });
   $('btn-steal').onclick   = () => trigger('/api/act/send', { amount: '1', forge: true });
-  $('btn-revoke').onclick  = () => trigger('/api/act/revoke', {});
+  $('btn-revoke').onclick  = revokeAction;
   $('btn-retry').onclick   = () => trigger('/api/act/send', { amount: '1' });
   $('btn-reset').onclick   = actReset;
   $('clear-log').onclick   = () => { log.innerHTML = ''; };
