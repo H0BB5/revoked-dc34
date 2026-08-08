@@ -11,30 +11,37 @@
 
 ## The demo
 
-The agent is a **real MCP client** (`npm run agent`) — the console is only a
-control plane driving it. The wallet never leaves the server (custodian); the
-agent holds *authority*, not keys to funds:
+The agent is **Claude Desktop** — the same MCP client thousands of people use —
+plugged into a local KYA-OS gateway that holds the agent's key and signs each
+call. **The LLM never touches key material.** The console is the *verifier's
+view*; the wallet never leaves the server (custodian). (No Claude Desktop on
+hand? `npm run agent` and the console's simulated-agent buttons drive the exact
+same path.)
 
 ```mermaid
 sequenceDiagram
     participant O as Operator / Issuer (did:cheqd)
-    participant A as AI Agent (MCP client, did:key)
+    participant B as DC34 Badge (FIDO2)
+    participant A as Claude Desktop (the brain — no keys)
+    participant G as kya-wallet gateway (agent key + VC)
     participant M as Protected MCP Server (withKyaOs)
     participant C as cheqd Resolver (Cosmos testnet)
     participant W as Server-held Wallet
-    participant U as Demo Console (control plane)
 
     O->>A: Issue scoped delegation VC (cap 10 CHEQ, status entry on-chain)
-    A->>M: wallet_send + VC + holder proof (signed by agent's did:key)
+    A->>G: "Pay 1 CHEQ to the vendor" → wallet_send
+    G->>M: wallet_send + VC + holder proof (signed by agent's did:key)
     M->>C: Verify issuer signature (on-chain DID doc) + status bit
     C-->>M: bit 0 — active
     M->>W: Execute 1 CHEQ transfer (cosmjs)
-    M-->>U: ALLOWED + tx hash + signed receipt (detached JWS)
-    O->>C: Revoke — publish new status-list version (append-only DLR)
-    A->>M: wallet_send again (fresh signed call)
+    M-->>A: ALLOWED + tx hash + signed receipt (detached JWS)
+    O->>B: Revoke → touch the badge (WebAuthn assertion, intent-bound)
+    B-->>M: assertion verified → publish new status-list version (append-only DLR)
+    A->>G: "Pay again" → wallet_send
+    G->>M: fresh signed call
     M->>C: Fresh status lookup
     C-->>M: bit 1 — REVOKED
-    M-->>U: DENIED (CREDENTIAL_REVOKED) — handler never entered
+    M-->>A: DENIED (CREDENTIAL_REVOKED) — handler never entered
 ```
 
 The beats, all live on stage:
@@ -51,11 +58,15 @@ The beats, all live on stage:
    credential, not app config). A thief replaying the *stolen credential*
    with their own key → `holder_binding_failed` **before the handler is
    entered** (spec §11.8 theft-replay closure).
-3. **The kill switch.** One action flips the credential's bit on a
-   **StatusList2021 credential anchored as a cheqd DID-Linked Resource** —
-   a new, append-only resource version on Cosmos testnet. Measured live:
-   ~5–9 s from click to anchored; resolver serves the new version in
-   **~550 ms**.
+3. **The kill switch — gated by hardware.** Revocation isn't a password and a
+   button: it requires a live **WebAuthn assertion from the DEF CON 34 badge**
+   (FIDO2, inspectable silicon), bound to the revocation's content hash — a
+   human, physically present, touching hardware. Only then does it flip the
+   credential's bit on a **StatusList2021 credential anchored as a cheqd
+   DID-Linked Resource** — a new, append-only version on Cosmos testnet
+   (~5–9 s to anchor; resolver serves it in **~550 ms**). *The software agent
+   signs with software; the human who can kill it signs with hardware.*
+   (Feature-flagged: `BADGE_WEBAUTHN=1`; a software confirm is the fallback.)
 4. **The agent tries again.** The very next signed call is refused by the
    *shipped* verifier in ~550 ms: `delegation_invalid — Credential revoked
    via StatusList2021 (revocation)`. **Funds never move.** The issuer cannot
@@ -73,8 +84,11 @@ no patched dependencies.
 | `src/cheqd-statuslist-resolver.ts` — on-chain StatusList2021 revocation checks: issuer-pinned, Ed25519-verified against the on-chain DID document, purpose-parity, strict index parsing, fail-closed on every anomaly | `StatusListResolver` verifier seam, `DelegationCredentialVerifier`, `withKyaOs` middleware |
 | `src/prepare-statuslist-dlr.ts` — vendored `StatusListCredential` DLR prep (type not yet in the library's manifest list; upstream DIF PR planned) | `prepareCheqdDlrResource` semantics, cheqd registrar client + resolver, `canonicalizeJSON`, `base58` utils |
 | `src/statuslist-ops.ts` — build / re-sign / publish-as-new-version / wait-visible | `BitstringManager` (W3C bitstring codec), Ed25519 crypto provider |
-| `src/server.ts` + `src/wallet-send-tool.ts` — real MCP server (Streamable HTTP, inspector-compatible) with the delegation-gated `wallet_send` (cosmjs bank send), holder binding ENFORCED, act API | `wrapWithDelegation` / `wrapWithProof` gates, scope matcher, proof generation |
-| `src/agent.ts` — THE AGENT: a standalone MCP client presenting the VC + a per-request holder proof (`generateRequestProof`), with a `--forge` theft-replay mode | MCP SDK client transport, `generateRequestProof` (client half of holder binding) |
+| `src/server.ts` + `src/wallet-send-tool.ts` — real MCP server (Streamable HTTP, inspector-compatible) with the delegation-gated `wallet_send` (cosmjs bank send), holder binding ENFORCED, SSE event bus, act API | `wrapWithDelegation` / `wrapWithProof` gates, scope matcher, proof generation |
+| `src/gateway.ts` — the agent runtime Claude Desktop plugs into: MCP server (stdio + streamable-http) holding the agent key + VC, signing each outbound call; LLM never touches keys | MCP SDK server/client transports |
+| `src/agent.ts` — the signing client the gateway (and simulated buttons) reuse: VC + per-request holder proof (`generateRequestProof`), `--forge` theft-replay mode | `generateRequestProof` (client half of holder binding) |
+| `src/badge/*` — badge-gated revocation over WebAuthn: intent-bound challenge (sha256 of the revocation), `@simplewebauthn/server` verify, fail-safe, hardware-attested record | — |
+| `web/index.html` — verifier-view console: live gate rail over SSE, badge "touch to authorize" ceremony (native WebAuthn) | — |
 | `web/index.html` — the self-contained act console (offline-first; con wifi is not a dependency) | — |
 | Operator scripts (`create-did`, `publish-statuslist`, `issue-delegation`, `revoke`, `verify-once`) + WP0 assumption checks + 22-test fail-closed matrix | — |
 
@@ -118,16 +132,21 @@ npm run check:a             # PROOF the latest-version resolver semantics hold
 npm run check:b             # one real bank send (RPC / chain-id / gas confirmed)
 npm run publish:statuslist  # anchor the all-clear list on-chain
 npm run issue:delegation    # capped credential at index 94
-npm run serve               # control plane at http://localhost:4949 (MCP at /mcp)
+npm run serve               # verifier + console at http://localhost:4949 (MCP at /mcp)
 
-npm run agent -- --amount 1        # THE AGENT: real MCP client, over the wire
-npm run agent -- --amount 100      # over the in-credential cap → refused
+# The agent — pick one:
+npm run gateway             # stdio gateway for Claude Desktop (see docs/OPERATOR.md)
+npm run agent -- --amount 1          # or the standalone signing client, over the wire
+npm run agent -- --amount 100        # over the in-credential cap → refused
 npm run agent -- --amount 1 --forge  # stolen VC, thief's key → holder_binding_failed
 ```
 
-Keys on the act page (it drives the same agent): `[1]` send · `[2]` over-cap ·
-`[5]` theft-replay · `[3]` revoke · `[4]` retry · `[R]` reset.
-Point [mcp-inspector](https://github.com/modelcontextprotocol/inspector) at
+**Claude Desktop as the live agent:** merge `docs/claude_desktop_config.json`,
+restart Claude Desktop, and ask it to "pay 1 CHEQ to the vendor" — full runbook
+in [`docs/OPERATOR.md`](docs/OPERATOR.md). Keys on the console (it drives the
+same agent): `[1]` send · `[2]` over-cap · `[5]` theft-replay · `[3]` revoke ·
+`[4]` retry · `[R]` reset. Or point
+[mcp-inspector](https://github.com/modelcontextprotocol/inspector) at
 `http://localhost:4949/mcp` and call `wallet_send` yourself — same gate.
 
 ## Trust-model delta (why on-chain)

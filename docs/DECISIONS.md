@@ -55,3 +55,37 @@ never from app config.
 - Rough backup video immediately after the first full round trip (~Sat
   12:30); the polished 16:30 take replaces it if it lands.
 - Assumption check A runs before any further build (TDD gate, endorsed).
+
+## D7 — Claude Desktop as the live agent, via a gateway (WP-A)
+
+The agent is Claude Desktop, not a bespoke client. A local `kya-wallet`
+gateway (`src/gateway.ts`) holds the agent's did:key + VC and signs each
+outbound `wallet_send`; Claude sees a clean tool surface with no crypto args.
+The LLM never touches key material — itself a talking point. The gateway
+exposes BOTH stdio (Claude Desktop's reliable local path) and streamable-http
+(the "remote connector tomorrow" story); the TDD specified http, but stdio is
+the bulletproof local integration, so we ship both and let the venue choose.
+Env/paths anchor to the repo (`REPO_ROOT`), because Claude Desktop spawns the
+gateway with an arbitrary cwd.
+
+## D8 — Console is a verifier VIEW over SSE (WP-B)
+
+The protected server broadcasts every `wallet_send` verdict (with a six-gate
+`checks` object mapped to the middleware's real gate order) over `/api/events`.
+The console renders from that stream, so a send driven by Claude Desktop lights
+the same gates as the simulated-agent buttons — one emission point, both paths
+identical. The buttons remain as the wifi/LLM-failure fallback.
+
+## D9 — Badge gates revocation, feature-flagged, fail-safe (WP-C)
+
+Badge-gated revocation is OFF by default and force-bypassable
+(`DEMO_BYPASS_WEBAUTHN`), so it can never block submission. When on
+(`BADGE_WEBAUTHN=1` + a registered credential), `/api/revoke` is two-phase and
+the WebAuthn challenge IS `sha256(canonical revocation intent)` — the assertion
+is bound to THIS revocation, not a generic login. No valid touch → 403 →
+nothing published (fail-safe). We do NOT overclaim: the badge authorizes the
+operator action; it does not hold the agent's Ed25519 key or sign the registrar
+tx (that's roadmap). Native WebAuthn in the browser keeps the console
+dependency-free/offline; `@simplewebauthn/server` handles verification.
+The live badge ceremony is the one thing untestable without hardware — the
+operator's Saturday P1–P4 + registration step (see OPERATOR.md).
