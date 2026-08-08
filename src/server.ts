@@ -44,6 +44,7 @@ import { CheqdDlrStatusListResolver } from './cheqd-statuslist-resolver.js';
 import { fetchLatestStatusList } from './statuslist-ops.js';
 import { revokeIndex, type RevokePhase } from './revoke.js';
 import { issueDelegationAt } from './issue-delegation.js';
+import { runAgentSend } from './agent.js';
 import {
   agentAddress,
   agentBalanceNcheq,
@@ -120,6 +121,10 @@ function buildGate(): { kyaos: KyaOsMiddleware; walletSendHandler: ReturnType<Ky
       delegation: {
         didResolver,
         statusListResolver,
+        // Subject-bound, not bearer: the caller must present a per-request
+        // proof signed by the delegation SUBJECT's did:key. A stolen
+        // credential without the agent's key → holder_binding_failed.
+        holderBinding: 'enforce',
       },
     },
     cryptoProvider,
@@ -240,12 +245,22 @@ app.get('/api/state', async (c) => {
 app.post('/api/act/send', async (c) => {
   const body = await c.req.json().catch(() => ({} as Record<string, unknown>));
   const amount = String((body as Record<string, unknown>)['amount'] ?? '1');
-  const started = Date.now();
-  const result = await gate.walletSendHandler(
-    { amount, _kyaos_delegation: activeCredential() },
-    undefined,
-  );
-  return c.json({ elapsedMs: Date.now() - started, result });
+  const forge = Boolean((body as Record<string, unknown>)['forge']);
+  // The console is only a control plane: this drives THE AGENT — a real MCP
+  // client that connects to our own /mcp over Streamable HTTP and presents
+  // credential + holder proof. Identical to running `npm run agent` in a
+  // terminal.
+  const outcome = await runAgentSend({
+    amount,
+    forge,
+    serverUrl: `http://localhost:${PORT}/mcp`,
+  });
+  return c.json({
+    elapsedMs: outcome.elapsedMs,
+    result: outcome.result,
+    agentDid: outcome.agentDid,
+    via: 'mcp/streamable-http',
+  });
 });
 
 app.post('/api/act/revoke', async (c) => {
@@ -282,13 +297,13 @@ const httpServer = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   if (url.pathname === '/mcp' && req.method === 'POST') {
     const server = createMcpServer();
-    // stateless mode: no sessionIdGenerator. Casts absorb the SDK's optional
-    // props not being declared `| undefined` (exactOptionalPropertyTypes).
+    // stateless mode: no sessionIdGenerator
     const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
       enableJsonResponse: true,
-    } as ConstructorParameters<typeof StreamableHTTPServerTransport>[0]);
+    });
     res.on('close', () => transport.close());
-    await server.connect(transport as unknown as Parameters<typeof server.connect>[0]);
+    await server.connect(transport);
     await transport.handleRequest(req, res);
     return;
   }

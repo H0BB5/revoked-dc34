@@ -223,6 +223,7 @@
       <div class="controls">
         <button class="act" id="btn-send">Agent sends 1 CHEQ<span class="key">[1]</span></button>
         <button class="act" id="btn-overcap">Agent tries 100 CHEQ<span class="key">[2]</span></button>
+        <button class="act" id="btn-steal">Thief replays stolen VC<span class="key">[5]</span></button>
         <button class="act danger" id="btn-revoke">Revoke on-chain<span class="key">[3]</span></button>
         <button class="act" id="btn-retry">Agent tries again<span class="key">[4]</span></button>
         <button class="act" id="btn-reset">Reset · next index<span class="key">[R]</span></button>
@@ -325,12 +326,14 @@
   }
 
   // ── acts ─────────────────────────────────────────────────────────────
-  async function actSend(amount, btn) {
+  async function actSend(amount, btn, opts = {}) {
     setBusy(true, btn);
     setSeal('wait');
-    line(`agent → wallet_send { amount: ${amount} CHEQ } — signed call, credential attached`, 'dim-line');
+    line(opts.forge
+      ? `THIEF (fresh MCP client) → wallet_send with the agent's STOLEN credential, signed by the thief's own key`
+      : `agent (real MCP client) → tools/call wallet_send { amount: ${amount} CHEQ } over Streamable HTTP — credential + holder proof attached`, 'dim-line');
     try {
-      const r = await api('/api/act/send', { amount });
+      const r = await api('/api/act/send', { amount, ...(opts.forge ? { forge: true } : {}) });
       const res = r.result;
       const text = res?.content?.[0]?.text ?? '{}';
       let body = {}; try { body = JSON.parse(text); } catch { body = { raw: text }; }
@@ -342,6 +345,10 @@
           setSeal('kill', `${r.elapsedMs} ms`);
           line(`⛔ ${code}: ${reason}`, 'kill-line', true);
           line('FUNDS NEVER MOVED — every verifier on earth reads the same chain', 'kill-line', true);
+        } else if (code === 'holder_binding_failed') {
+          setSeal('ok', `${r.elapsedMs} ms`);
+          line(`⛔ ${code}: ${reason}`, 'kill-line', true);
+          line('stolen credential + wrong key → refused BEFORE the handler. Theft-replay closed (spec §11.8) — the credential is subject-bound, not bearer.', 'dim-line');
         } else {
           setSeal('ok', `${r.elapsedMs} ms`);
           line(`⛔ ${code}: ${reason}`, 'warn-line', true);
@@ -404,6 +411,7 @@
   // ── wiring ───────────────────────────────────────────────────────────
   $('btn-send').onclick    = () => actSend('1', $('btn-send'));
   $('btn-overcap').onclick = () => actSend('100', $('btn-overcap'));
+  $('btn-steal').onclick   = () => actSend('1', $('btn-steal'), { forge: true });
   $('btn-revoke').onclick  = () => actRevoke($('btn-revoke'));
   $('btn-retry').onclick   = () => actSend('1', $('btn-retry'));
   $('btn-reset').onclick   = () => actReset($('btn-reset'));
@@ -418,10 +426,11 @@
     if (e.key === '2') $('btn-overcap').click();
     if (e.key === '3') $('btn-revoke').click();
     if (e.key === '4') $('btn-retry').click();
+    if (e.key === '5') $('btn-steal').click();
     if (e.key === 'r' || e.key === 'R') $('btn-reset').click();
   });
 
-  line('REVOKED · demo console ready — keys [1] send · [2] over-cap · [3] revoke · [4] retry · [R] reset', 'dim-line');
+  line('REVOKED · control plane ready — the agent is a separate MCP client. Keys: [1] send · [2] over-cap · [5] theft-replay · [3] revoke · [4] retry · [R] reset', 'dim-line');
   refresh();
 })();
 </script>

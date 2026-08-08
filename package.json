@@ -19,6 +19,7 @@
     "issue:delegation": "tsx src/issue-delegation.ts",
     "revoke": "tsx src/revoke.ts",
     "verify:once": "tsx src/verify-once.ts",
+    "agent": "tsx src/agent.ts",
     "serve": "tsx src/server.ts"
   },
   "dependencies": {
