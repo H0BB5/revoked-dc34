@@ -86,6 +86,11 @@ export function createBadgeRoutes(config: BadgeRoutesConfig): Hono {
         expectedChallenge: pendingRegChallenge,
         expectedOrigin: config.origin,
         expectedRPID: config.rpID,
+        // Presence (touch), not UV (PIN/biometric) — matches the 'discouraged'
+        // userVerification we registered with. Without this, the verify demands
+        // UV and rejects a touch-only badge attestation (the DC34 badge does
+        // presence, not UV).
+        requireUserVerification: false,
       });
       if (!verification.verified || !verification.registrationInfo) {
         return c.json({ verified: false }, 400);
