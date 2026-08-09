@@ -78,7 +78,7 @@
         let live = false;
         try { live = !!(await (await fetch('/api/state')).json()).badgeRequired; } catch (e) {}
         const next = live
-          ? 'Badge mode is LIVE now — reload the console; Revoke requires this badge. No restart needed.'
+          ? 'Badge mode is LIVE now — reload the console; Revoke requires this badge.'
           : 'To arm it, start the server with BADGE_WEBAUTHN=1 (flags are read at startup).';
         say(`registered ✓  credId …${v.credIdTail}\n\n${next}`, 'ok');
       }
