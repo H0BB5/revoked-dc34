@@ -26,9 +26,13 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { env } from './lib/wiring.js';
 import { runAgentSend, loadAgentIdentity } from './agent.js';
-import { agentAddress, agentBalanceNcheq, NCHEQ_PER_CHEQ } from './wallet-send-tool.js';
 
 const PROTECTED_URL = env('PROTECTED_MCP_URL', `http://localhost:${env('DEMO_PORT', '4949')}/mcp`);
+// The custodian's origin. The gateway holds only the agent's did:key authority
+// key — it NEVER loads the funds wallet mnemonic. Balance is a read call to the
+// protected server (which custodies the wallet), so the trust boundary is
+// physical, not just logical: kill this process and no funds key is exposed.
+const PROTECTED_ORIGIN = new URL(PROTECTED_URL).origin;
 
 function cheq(ncheq: bigint): string {
   return (Number(ncheq) / 1e9).toLocaleString('en-US', { maximumFractionDigits: 4 });
@@ -74,13 +78,25 @@ function createGatewayServer(): Server {
     const { name, arguments: args = {} } = request.params;
 
     if (name === 'check_balance') {
-      const [address, balance] = await Promise.all([agentAddress(), agentBalanceNcheq()]);
-      return {
-        content: [{
-          type: 'text',
-          text: `Wallet ${address}\nBalance: ${cheq(balance)} CHEQ (testnet)`,
-        }],
-      };
+      // Read from the custodian, not from a local key. The protected server
+      // holds the wallet; the gateway just relays what it reports.
+      try {
+        const res = await fetch(`${PROTECTED_ORIGIN}/api/state`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const s = (await res.json()) as { agentAddress?: string; balanceNcheq?: string };
+        return {
+          content: [{
+            type: 'text',
+            text: `Wallet ${s.agentAddress ?? '(unknown)'}\n` +
+              `Balance: ${cheq(BigInt(s.balanceNcheq ?? '0'))} CHEQ (testnet)`,
+          }],
+        };
+      } catch (err) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Could not read balance from the payment server: ${err instanceof Error ? err.message : String(err)}` }],
+        };
+      }
     }
 
     if (name === 'wallet_send') {
@@ -113,11 +129,11 @@ function createGatewayServer(): Server {
           };
         }
 
-        const cap = `${cheq(NCHEQ_PER_CHEQ * 0n + BigInt(String(body['amountNcheq'] ?? '0')))} CHEQ`;
+        const sent = `${cheq(BigInt(String(body['amountNcheq'] ?? '0')))} CHEQ`;
         return {
           content: [{
             type: 'text',
-            text: `Sent ${cap} to ${String(body['to'] ?? 'the vendor')}.\n` +
+            text: `Sent ${sent} to ${String(body['to'] ?? 'the vendor')}.\n` +
               `Transaction: ${String(body['txHash'] ?? '')}\n` +
               `Explorer: ${String(body['explorer'] ?? '')}`,
           }],

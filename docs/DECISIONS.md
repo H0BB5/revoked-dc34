@@ -89,3 +89,17 @@ tx (that's roadmap). Native WebAuthn in the browser keeps the console
 dependency-free/offline; `@simplewebauthn/server` handles verification.
 The live badge ceremony is the one thing untestable without hardware — the
 operator's Saturday P1–P4 + registration step (see OPERATOR.md).
+
+## D10 — Custody boundary is physical: the gateway never loads the funds wallet
+
+Originally the gateway read `AGENT_MNEMONIC` to show the balance in
+`check_balance` — so on one laptop it could see the funds secret, making the
+"gateway holds only the authority key" claim true for *signing* but not for
+*secret access*. Closed it: `check_balance` now reads the balance from the
+protected server (`/api/state`), and the gateway no longer imports the wallet
+module at all. Proven by the import graph — the gateway → agent.js path has
+zero references to `AGENT_MNEMONIC` or `wallet-send-tool`. So the wallet
+(funds) lives ONLY on the protected server (the executor that also enforces
+revocation — the reason the kill switch works); the gateway holds ONLY the
+agent's did:key authority key; Claude holds neither. Logical boundary is now a
+physical one, and it survives a judge asking "where does the wallet live?".
