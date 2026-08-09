@@ -103,6 +103,10 @@
   button.act .key { display: block; margin-top: 5px; font-size: 9px; font-weight: 400; color: var(--dim); letter-spacing: 0.2em; }
   button.act.danger { border-color: var(--kill-deep); color: var(--kill); }
   button.act.danger:hover:not(:disabled) { background: var(--kill-dim); border-color: var(--kill); }
+  .kill-note { padding: 0 14px 14px; font-size: 11.5px; letter-spacing: 0.03em; color: var(--dim); }
+  .kill-note.armed { color: var(--warn); }
+  .kill-note b { color: var(--bright); }
+  .kill-note.armed b { color: var(--warn); }
 
   .log { padding: 12px 14px; max-height: 320px; overflow-y: auto; font-size: 12.5px; }
   .log-line { display: grid; grid-template-columns: 60px 1fr; gap: 12px; padding: 2.5px 0; animation: appear 0.18s ease-out; }
@@ -211,6 +215,7 @@
         <button class="act" id="btn-retry">Try again<span class="key">[4]</span></button>
         <button class="act" id="btn-reset">Reset · next index<span class="key">[R]</span></button>
       </div>
+      <div class="kill-note" id="kill-note"></div>
     </section>
 
     <section class="panel">
@@ -315,6 +320,17 @@
       else if (s.revoked) { bit.textContent = '1 — REVOKED'; bit.className = 'v bit-set'; }
       else { bit.textContent = '0 — clear'; bit.className = 'v bit-clear'; }
       $('list-url').href = s.statusListUrl;
+      const kn = $('kill-note');
+      if (s.badgeRequired) {
+        kn.className = 'kill-note armed';
+        kn.innerHTML = '⏻ <b>Revoke is hardware-gated</b> — it requires a physical DEF CON 34 badge touch (FIDO2 / WebAuthn), cryptographically bound to this revocation. A leaked password can\'t fire it.';
+      } else if (s.badgeConfigured) {
+        kn.className = 'kill-note';
+        kn.innerHTML = '⏻ Revoke is <b>software-confirmed</b> (badge registered but bypassed for this session).';
+      } else {
+        kn.className = 'kill-note';
+        kn.innerHTML = '⏻ Revoke is software-confirmed · hardware badge gating available — register the DC34 badge and arm with BADGE_WEBAUTHN=1.';
+      }
       return s;
     } catch (err) { line(`state refresh failed: ${err.message}`, 'kill-line'); }
   }
