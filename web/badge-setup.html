@@ -74,7 +74,14 @@
       say('verifying…');
       const verRes = await fetch('/api/badge/register/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(attestation) });
       const v = await verRes.json();
-      if (v.verified) say(`registered ✓  credId …${v.credIdTail}  aaguid ${v.aaguid ?? 'n/a'}\n\nNow set BADGE_WEBAUTHN=1 and restart the server.`, 'ok');
+      if (v.verified) {
+        let live = false;
+        try { live = !!(await (await fetch('/api/state')).json()).badgeRequired; } catch (e) {}
+        const next = live
+          ? 'Badge mode is LIVE now — reload the console; Revoke requires this badge. No restart needed.'
+          : 'To arm it, start the server with BADGE_WEBAUTHN=1 (flags are read at startup).';
+        say(`registered ✓  credId …${v.credIdTail}\n\n${next}`, 'ok');
+      }
       else say('verification failed: ' + (v.error || 'unknown'), 'err');
     } catch (e) {
       say('cancelled / error: ' + (e && e.message ? e.message : e), 'err');
