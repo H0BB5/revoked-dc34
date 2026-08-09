@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>REVOKED — verifier view</title>
+<title>KYA-OS · REVOKED — verifier view</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0c0f'/%3E%3Crect x='2' y='2' width='28' height='28' fill='none' stroke='%23ff3b47' stroke-width='3'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='19' font-weight='900' fill='%23ff3b47' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
 <style>
   :root {
@@ -32,7 +32,8 @@
   }
 
   header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
-  .wordmark { font-size: clamp(24px, 3.6vw, 38px); font-weight: 800; letter-spacing: 0.22em; color: var(--bright); text-transform: uppercase; }
+  .wordmark { font-size: clamp(24px, 3.6vw, 38px); font-weight: 800; letter-spacing: 0.22em; color: var(--bright); text-transform: uppercase; display: flex; align-items: baseline; gap: 12px; }
+  .wordmark .pre { font-size: 0.42em; color: var(--dim); letter-spacing: 0.28em; font-weight: 700; }
   .wordmark .cut { color: var(--kill); }
   .role { color: var(--warn); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; border: 1px solid var(--warn); padding: 2px 8px; }
   .subhead { color: var(--dim); font-size: 12px; letter-spacing: 0.05em; margin-bottom: 16px; }
@@ -185,7 +186,7 @@
 <body>
 
 <header>
-  <div class="wordmark">REVOK<span class="cut">ED</span></div>
+  <div class="wordmark"><span class="pre">KYA-OS</span><span>REVOK<span class="cut">ED</span></span></div>
   <div class="role">Verifier view</div>
   <div class="live" id="live"><span class="dot"></span><span id="live-text">connecting…</span></div>
 </header>
@@ -197,7 +198,7 @@
 <div class="grid">
   <div>
     <section class="panel">
-      <div class="panel-head"><span>Agent wallet</span><span id="net" class="pill">chain · cheqd-testnet-6</span></div>
+      <div class="panel-head"><span>Agent wallet</span><span id="net" class="pill">Cosmos · cheqd-testnet-6</span></div>
       <div class="panel-body">
         <div class="balance-line"><span class="balance" id="balance">—</span><span class="balance-unit">CHEQ</span></div>
         <div class="balance-delta" id="balance-delta"></div>
