@@ -60,7 +60,7 @@ import {
 
 const PORT = Number(env('DEMO_PORT', '4949'));
 const ACTIVE_INDEX_FILE = path.join(VAR_DIR, 'active-index');
-const SPARE_MAX = 120; // 131072-bit list; burn as many rehearsal indices as needed
+const SPARE_MAX = 131000; // the status list is 131072 bits — effectively never run out of rehearsal indices
 
 // Badge (WebAuthn) config. Feature is OFF unless BADGE_WEBAUTHN=1, and can be
 // force-bypassed on stage with DEMO_BYPASS_WEBAUTHN=1 — so the badge can never
