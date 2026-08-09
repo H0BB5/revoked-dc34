@@ -1,24 +1,35 @@
 # Final Submission Form — ready-to-paste answers
 
-Submit by **Sat Aug 8, 22:00 PDT** (deadline is midnight; do not flirt with it).
+Form: https://docs.google.com/forms/d/e/1FAIpQLScxpTjg4JKjx1FBoV0PrVSCtC6_ov1VS8mhbXja6IrEUpft4w/viewform
+Submit by **Sat Aug 8, 22:00 PDT** (deadline is midnight; don't flirt with it).
 
-| Field | Answer |
-|---|---|
-| Team name | **Revoked** |
-| Members | Dylan Hobbs (solo) |
-| Primary contact | dylan.hobbs@vouched.id |
-| Project name | **REVOKED — an on-chain kill switch for AI agents with wallet access** |
-| One-sentence summary | A kill switch for AI agents with wallet access: agents spend under cryptographically scoped, verifiable delegations (DIDs + Ed25519-signed tool calls), and that spending authority can be revoked on Cosmos — stopping a rogue or hijacked agent before it drains a wallet, with no server anyone has to trust. |
-| Category | Security *(check the form's actual nine options at the village desk; nearest fit wins — Sovereignty/Survive if their four domains appear)* |
-| Problem statement | AI agents are getting private keys and spending authority. Today there is no standard way to scope that authority cryptographically, and revocation — the thing that stops a hijacked agent mid-drain — lives on servers the issuer controls and can quietly rewrite. The next class of wallet-draining attacks won't be phishing links; it will be delegated agents whose authority nobody can verifiably kill. |
-| Target audience | Wallet builders, agent-platform and MCP-server developers, custodians and issuers who need provable, non-repudiable revocation of agent authority. |
-| Build description (Aug 6–9) | Moved KYA-OS delegation revocation from an issuer-hosted HTTPS endpoint to a StatusList2021 credential anchored as a cheqd DID-Linked Resource on Cosmos testnet, and demoed it against a REAL agent: Claude Desktop, plugged into a local KYA-OS gateway that holds the agent's key and signs each call — the LLM never touches key material. All new code lives in one repo against the published `@kya-os/mcp@1.12.0` npm package (no forks): an on-chain StatusListResolver (issuer-pinned, signature-verified against the on-chain DID document, fail-closed with a 27-test matrix); DLR publish/revoke tooling (each revocation = a new append-only version); a real MCP server whose `wallet_send` moves CHEQ on testnet under a 10-CHEQ in-credential cap, with holder-of-key binding ENFORCED (the credential is subject-bound, not bearer — a thief replaying a stolen VC is refused before the handler runs); a verifier-view console that observes the server over SSE (so Claude-driven and simulated sends light the same six gates); and badge-gated revocation over WebAuthn — the on-chain kill switch requires a live FIDO2 assertion from the DEF CON 34 badge, bound to the revocation's content hash (a human, physically present, touching inspectable silicon). Measured live: revocation anchored in ~5–9 s, resolver-visible in ~550 ms, next call refused (`CREDENTIAL_REVOKED`) in ~550 ms — funds never move. Rehearsals surfaced two real upstream bugs (a 60 s verifier verdict cache that masked fresh revocations; sessionless holder-binding proofs failing structural validation), both fixed and queued as DIF PRs. |
-| Project status | Working demo — full loop live on cheqd testnet (issue → Claude Desktop spends → badge-gated revoke on-chain → refuse), judge-verifiable from a clean clone with zero secrets. |
-| Tools / chains / protocols | cheqd testnet (Cosmos SDK) · cheqd DID registrar + universal resolver · DID-Linked Resources · W3C DID + Verifiable Credentials + StatusList2021 · KYA-OS / `@kya-os/mcp` (DIF) · Model Context Protocol (Streamable HTTP) · Claude Desktop (MCP client) · WebAuthn / FIDO2 (DC34 badge) · CosmJS · TypeScript |
-| GitLab URL | *(fork + MR into their `hackathon-submissions`; mirror of github.com/H0BB5/revoked-dc34)* |
-| Demo video URL | *(record Sat; public link, viewable logged-out, ≤3:00)* |
-| Slides URL | *(web/slides.html — served at http://localhost:4949/slides.html by `npm run serve`; export/host or share screen)* |
-| Documentation URL | https://github.com/H0BB5/revoked-dc34#readme |
+> The form has **no live-app / hosted-URL field** — only GitLab, video, slides,
+> docs (all optional), and in-person-vs-video. So we do NOT deploy; the demo
+> runs locally and the video is the insurance.
+
+Fields in form order:
+
+| # | Field (required?) | Answer |
+|---|---|---|
+| 1 | Team Name *(req)* | **Revoked** |
+| 2 | Members + primary contact name, email, phone *(req)* | Dylan Hobbs (solo) · dylan.hobbs@vouched.id · **‹your phone›** |
+| 3 | Project Name *(req)* | **REVOKED — an on-chain kill switch for AI agents with wallet access** |
+| 4 | One-sentence summary *(req, short)* | A hardware-triggered, on-chain kill switch for AI agents with wallet access: agents spend under signed, scoped, revocable credentials, and a human touching the DEF CON badge revokes that authority on Cosmos — stopping a rogue agent before it drains a wallet. |
+| 5 | Category *(req, choose one)* | **Security** — *(or "Wallet Tooling" to lean into the village's wallet-safety center of gravity; both defensible. Security is the honest core.)* |
+| 6 | Problem + who it's for *(req)* | AI agents are getting keys and spending authority. There's no standard way to scope that authority cryptographically, and revocation — the thing that stops a hijacked agent mid-drain — lives on servers the issuer controls and can quietly rewrite. The next wallet-drainer won't be a phishing link; it'll be someone's agent. For: wallet builders, agent-platform / MCP developers, and custodians who need provable, non-repudiable revocation of agent authority. |
+| 7 | What you built Aug 6–9 *(req)* | *(paste the build description below)* |
+| 8 | Project status *(req, choose one)* | **Demo ready** |
+| 9 | Tools/chains/protocols *(req, multi-select)* | **GitLab** + **Other** — in Other, type: *cheqd testnet (Cosmos), DID-Linked Resources, W3C DID/VC/StatusList2021, Model Context Protocol, Claude Desktop, WebAuthn/FIDO2 (DC34 badge), CosmJS, KYA-OS/@kya-os/mcp (DIF), TypeScript* |
+| 10 | GitLab Repository URL *(opt)* | *(the fork/mirror URL — mirror of github.com/H0BB5/revoked-dc34)* |
+| 11 | Demo Video URL *(opt)* | *(public, logged-out, ≤3:00 — record Sat)* |
+| 12 | Presentation Slides URL *(opt)* | *(optional; skip, or export web/slides.html to Google Slides. You're presenting in person, so screen-share it instead.)* |
+| 13 | Documentation URL *(opt)* | https://github.com/H0BB5/revoked-dc34#readme *(or the GitLab README)* |
+| 14 | Sunday presentation mode *(req)* | **In person** *(still upload the video in #11 as wifi insurance)* |
+| 15 | If video: shareable link + checkboxes *(conditional)* | n/a if In person; otherwise the #11 link |
+
+## Field 7 — build description (paste verbatim)
+
+Moved KYA-OS delegation revocation from an issuer-hosted HTTPS endpoint to a StatusList2021 credential anchored as a cheqd DID-Linked Resource on Cosmos testnet, and demoed it against a REAL agent: Claude Desktop, plugged into a local KYA-OS gateway that holds the agent's key and signs each call — the LLM never touches key material. All new code is in one repo against the published @kya-os/mcp@1.12.0 npm package (no forks): an on-chain StatusListResolver (issuer-pinned, signature-verified against the on-chain DID document, fail-closed, 27-test matrix); DLR publish/revoke tooling (each revocation = a new append-only version); a real MCP server whose wallet_send moves CHEQ on testnet under a 10-CHEQ in-credential cap, with holder-of-key binding ENFORCED (the credential is subject-bound, not bearer — a thief replaying a stolen VC is refused before the handler runs); a verifier-view console observing the server over SSE (Claude-driven and simulated sends light the same six gates); and badge-gated revocation over WebAuthn — the on-chain kill switch requires a live FIDO2 assertion from the DEF CON 34 badge, bound to the revocation's content hash (a human, physically present, touching inspectable silicon). Measured live on testnet: revocation anchored in ~5–9s, resolver-visible in ~550ms, next call refused (CREDENTIAL_REVOKED) in ~550ms — funds never move. Rehearsals surfaced two real upstream bugs (a 60s verifier verdict cache that masked fresh revocations; sessionless holder-binding proofs failing structural validation), both fixed and queued as DIF PRs.
 
 ## Video shot list (≤3:00, split screen: Claude Desktop left, verifier console right)
 
