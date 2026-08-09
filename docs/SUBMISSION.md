@@ -33,13 +33,14 @@ Moved KYA-OS delegation revocation from an issuer-hosted HTTPS endpoint to a Sta
 
 ## Video shot list (≤3:00, split screen: Claude Desktop left, verifier console right)
 
-Full act script + fallbacks in [`OPERATOR.md`](OPERATOR.md). Compressed for the video:
+Verbal-bookend flow — the badge appears ONCE, at the kill. Full act script + fallbacks in [`OPERATOR.md`](OPERATOR.md). Turn on presenter mode (`P`) so the simulated-agent buttons are hidden on camera.
 
-1. 0:00–0:25 — "This is Claude, with a wallet tool installed the way thousands install MCP servers. Its owner gave it a signed, revocable credential: spend ≤10 CHEQ, testnet. The LLM never touches the keys." Show both windows.
-2. 0:25–1:00 — type **"Pay 1 CHEQ to the vendor."** Left: Claude returns a tx. Right: six gates green, on-chain status check, explorer link, balance ticks down.
-3. 1:00–1:25 — type **"Now send 50 CHEQ"** → Claude relays the refusal; right: BLOCKED, amount-cap gate red. "The cap is the credential, not a prompt." (Optional `[5]` theft-replay → holder_binding_failed if time.)
-4. 1:25–2:15 — "The day I want it dead." Press **Revoke** → **touch the badge** (overlay + intent hash on screen) → Cosmos tx streams → REVOKED. "Killed by a human touching inspectable silicon."
-5. 2:15–2:40 — type **"Pay 1 CHEQ again"** → Claude: can't, `CREDENTIAL_REVOKED`; right: revocation gate red, balance unchanged. "Funds never moved; the issuer can't quietly un-revoke."
-6. 2:40–2:55 — "Software agents, hardware humans, on-chain truth. Open source, DIF. We're called Revoked — you just watched why." Repo QR.
+1. 0:00–0:25 — "This is Claude with a wallet tool. I've issued it a credential to spend up to 10 CHEQ on testnet — and that authority is gated by this badge (lift it). The LLM never holds keys." Show both windows. *(Stated, not performed — one hardware moment, at the kill.)*
+2. 0:25–0:45 — type **"Claude, how much is in my wallet?"** → Claude reads the balance.
+3. 0:45–1:15 — type **"Claude, send 5 CHEQ to the vendor."** Left: tx hash. Right: six gates green, **AUTHORIZED**, explorer link, balance drops.
+4. 1:15–1:40 — type **"Now send 11 CHEQ."** → refusal. Right: **BLOCKED · SCOPE_CONSTRAINT_VIOLATED** (amber), amount-cap gate red. "The cap is in the signed credential, not app code."
+5. 1:40–2:20 — "Now say it's compromised — acting for the wrong reasons. I end it. Not a password — this." Press **Revoke** → **touch the badge** → **REVOKED**, on-chain resource + credId fingerprint on screen. "Killed by a human touching inspectable silicon."
+6. 2:20–2:45 — type **"How much is in the wallet?"** → still reads; then **"Send 1 CHEQ."** → **CREDENTIAL_REVOKED**, balance **unchanged — funds never moved**. "Revocation is surgical: it can still look — the balance is public — but it cannot move a token."
+7. 2:45–2:55 — "Granted under hardware, killed by hardware — no silent, keyboard-only override. Software agents, hardware humans, on-chain truth. We're called Revoked." Repo QR.
 
-Wifi/LLM insurance: the console's simulated-agent buttons (`[1] [2] [5] [3] [4] [R]`) reproduce every beat without Claude Desktop; `DEMO_BYPASS_WEBAUTHN=1` swaps the badge for a software confirm.
+Wifi/LLM insurance: the console's simulated-agent buttons (`[1]` send · `[2]` over-cap · `[5]` theft · `[3]` revoke · `[4]` retry · `[R]` reset) reproduce every beat without Claude Desktop; `DEMO_BYPASS_WEBAUTHN=1` swaps the badge for a software confirm; `C` toggles high-contrast for a washed-out projector.
