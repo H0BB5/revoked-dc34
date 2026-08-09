@@ -51,7 +51,7 @@ export async function revokeIndex(
   const emit = (phase: RevokePhase['phase'], detail: string) =>
     options?.onPhase?.({ phase, detail, elapsedMs: Date.now() - started });
 
-  emit('fetch', `reading latest list from ${url}`);
+  emit('fetch', 'reading the latest status list from the cheqd resolver');
   const current = await fetchLatestStatusList(fetchProvider, url, { bust: true });
 
   emit('sign', `setting bit ${index} → ${revoked ? '1 (REVOKED)' : '0 (restored)'} and re-signing`);
