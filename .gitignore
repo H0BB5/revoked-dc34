@@ -7,3 +7,6 @@ var/
 .data/
 *.log
 .DS_Store
+
+# internal form-prep notes — kept local, not published
+docs/SUBMISSION.md
