@@ -395,7 +395,7 @@ app.post('/api/act/revoke', async (c) => {
 app.route('/', createBadgeRoutes({
   rpID: RP_ID,
   origin: ORIGIN,
-  rpName: 'REVOKED — KYA-OS',
+  rpName: 'REVOKED KYA-OS',
   setupEnabled: BADGE_SETUP,
   statusListUrl: () => statusListUrl(identity.did),
   currentIndex: () => activeIndex(),
