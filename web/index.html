@@ -383,9 +383,11 @@
         setGates(''); setSeal('wait', 'killing');
         line(`operator → revoke: flipping bit ${e.index} on the on-chain status list…`, 'warn-line');
       } else if (e.type === 'revoke_phase') {
-        line(`[${String(e.elapsedMs).padStart(5)} ms] ${e.phase}: ${e.detail}`, 'warn-line');
+        // gutter is a running clock: elapsed since Revoke was pressed
+        line(`[+${String(e.elapsedMs).padStart(5)} ms] ${e.phase} — ${e.detail}`, 'warn-line');
       } else if (e.type === 'revoke_done') {
-        line(`⚡ new list version anchored — resource ${short(e.resourceId, 20)} · visible in ${e.visibleMs} ms`, 'kill-line', true);
+        // two distinct measures: resolver propagation vs the whole revoke
+        line(`⚡ new list version anchored on Cosmos — resource ${short(e.resourceId, 20)} · resolver served it in ${e.visibleMs} ms · total ${e.totalMs} ms`, 'kill-line', true);
         line('append-only versions: the issuer cannot quietly un-revoke', 'dim-line');
         setSeal('kill'); refresh();
       }
@@ -472,7 +474,7 @@
       const exec = await api('/api/revoke/execute', { nonce: ch.nonce, response: assertion });
       hideBadge();
       if (exec.error) { line('Revocation refused (badge): ' + exec.error, 'kill-line', true); }
-      else { line(`badge assertion verified ✓ · credId …${exec.credentialIdTail} · aaguid ${exec.aaguid ?? 'n/a'} · record ${(exec.recordFile || '').split('/').pop() || ''}`, 'kill-line'); }
+      else { line(`badge assertion verified ✓ · badge fingerprint credId …${exec.credentialIdTail} · record ${(exec.recordFile || '').split('/').pop() || ''}`, 'kill-line'); }
       // the SSE revoke_* events drive the seal + phase log
     } catch (e) { hideBadge(); line('badge revoke error: ' + e.message, 'kill-line'); }
     setBusy(false);

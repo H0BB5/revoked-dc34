@@ -31,7 +31,7 @@ import { BitstringManager } from '@kya-os/mcp';
 import { gzipCompressor, gzipDecompressor } from './lib/wiring.js';
 
 export interface RevokePhase {
-  phase: 'fetch' | 'sign' | 'submit' | 'visible';
+  phase: 'fetch' | 'sign' | 'submit' | 'propagate';
   detail: string;
   elapsedMs: number;
 }
@@ -63,7 +63,7 @@ export async function revokeIndex(
   const txHash = findStringByKey(published.response, 'transactionHash') ??
     findStringByKey(published.response, 'txHash');
 
-  emit('visible', 'waiting for the resolver to serve the new version');
+  emit('propagate', 'waiting for the resolver to serve the new version');
   const visible = await waitForStatusListVisible({
     fetchProvider,
     url,
