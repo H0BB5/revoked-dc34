@@ -326,11 +326,12 @@
     log.prepend(el);
   }
 
-  const SEAL_TEXT = { ok: 'AUTHORIZED', kill: 'REVOKED', blocked: 'BLOCKED', denied: 'BLOCKED', wait: 'WORKING', ready: 'READY' };
+  // 'kill' = the operator's revoke action (the credential got killed);
+  // 'denied' = a refused agent request (theft, or a spend on a revoked credential).
+  const SEAL_TEXT = { ok: 'AUTHORIZED', kill: 'REVOKED', blocked: 'BLOCKED', denied: 'DENIED', wait: 'WORKING', ready: 'READY' };
   function setSeal(state, note = '') {
     seal.className = 'seal ' + (state === 'ready' ? 'ok' : state);
     seal.textContent = SEAL_TEXT[state] ?? 'WORKING';
-    document.body.classList.toggle('revoked', state === 'kill');
     $('verdict-note').textContent = note;
   }
   // the machine verdict under the stamp: '' | amber | red
@@ -383,6 +384,9 @@
         setTimeout(() => bit.classList.remove('pulse-change'), 600);
       }
       lastRevoked = s.revoked;
+      // red "danger" ambiance tracks the credential's actual revoked state,
+      // not the seal word — so it persists through the agent's DENIED retry.
+      document.body.classList.toggle('revoked', s.revoked === true);
       $('list-url').href = s.statusListUrl;
       const kn = $('kill-note');
       if (s.badgeRequired) {
@@ -434,7 +438,7 @@
           line(`⛔ holder_binding_failed: ${e.reason}`, 'kill-line', true);
           line('stolen credential + wrong key → refused BEFORE the handler. Subject-bound, not bearer (spec §11.8).', 'dim-line');
         } else if (/revoked/i.test(e.reason || '')) {
-          setSeal('kill'); setCode('CREDENTIAL_REVOKED · funds never moved', 'red');
+          setSeal('denied'); setCode('CREDENTIAL_REVOKED · funds never moved', 'red');
           line(`⛔ ${e.code}: ${e.reason}`, 'kill-line', true);
           line('FUNDS NEVER MOVED — every verifier on earth reads the same chain', 'kill-line', true);
         } else {
