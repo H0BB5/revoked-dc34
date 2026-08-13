@@ -2,6 +2,14 @@
 
 **DEF CON 34 · Cryptocurrency Village Hackathon · team "Revoked" (solo) · built Aug 6–9, 2026**
 
+> **This demo now lives in the DIF reference implementation** as
+> [`examples/revoked`](https://github.com/decentralized-identity/kya-os-mcp/tree/main/examples/revoked),
+> maintained against the published `@kya-os/mcp` package. Everything this repo
+> had to vendor (the on-chain resolver, the DLR publisher, the JWK-rewriting
+> workaround) shipped upstream in
+> [#165 through #169](https://github.com/decentralized-identity/kya-os-mcp/pulls?q=is%3Apr+is%3Amerged+165..169).
+> This repo is preserved unchanged as the hackathon artifact the judges saw.
+
 > Agents spend under cryptographically scoped, verifiable delegations (DIDs +
 > Ed25519-signed tool calls), and that spending authority can be revoked on
 > Cosmos — stopping a rogue or hijacked agent before it drains a wallet, with
